@@ -15,7 +15,6 @@ docs = {
     "spec.txt": "Technical requirements for the equipment.",
 }
 
-
 # TOOLS
 @mcp.tool(name="doc_read_fixed", description="Read a fixed sample document.")
 def doc_read_fixed() -> str:
@@ -26,6 +25,18 @@ def doc_read(doc_id: str = Field(description="Document id")) -> str:
     if doc_id not in docs:
         raise ValueError("Document not found")
     return docs[doc_id]
+
+
+
+# RESOURCES
+@mcp.resource("docs://all", mime_type="application/json")
+def docs_all() -> list[str]:
+    return list(docs.keys())
+
+@mcp.resource("docs://{doc_id}", mime_type="text/plain")
+def docs_one(doc_id: str) -> str:
+    return docs[doc_id]
+
 
 
 # Run app
