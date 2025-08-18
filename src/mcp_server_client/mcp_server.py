@@ -16,9 +16,12 @@ docs = {
 }
 
 # TOOLS
+
+
 @mcp.tool(name="doc_read_fixed", description="Read a fixed sample document.")
 def doc_read_fixed() -> str:
     return docs["deposition.md"]
+
 
 @mcp.tool(name="doc_read", description="Read any document by id.")
 def doc_read(doc_id: str = Field(description="Document id")) -> str:
@@ -26,17 +29,30 @@ def doc_read(doc_id: str = Field(description="Document id")) -> str:
         raise ValueError("Document not found")
     return docs[doc_id]
 
-
-
 # RESOURCES
+
+
 @mcp.resource("docs://all", mime_type="application/json")
 def docs_all() -> list[str]:
     return list(docs.keys())
+
 
 @mcp.resource("docs://{doc_id}", mime_type="text/plain")
 def docs_one(doc_id: str) -> str:
     return docs[doc_id]
 
+# PROMPTS
+
+
+@mcp.prompt(name="doc_list", description="Shows available documents.")
+def doc_list() -> list[base.Message]:
+    return [base.UserMessage("\n".join(docs.keys()))]
+
+
+@mcp.prompt(name="doc_format", description="Ask to format a document to markdown.")
+def doc_format(doc_id: str = Field(description="Document id")) -> list[base.Message]:
+    msg = f"Reformat document <document_id>{doc_id}</document_id> into markdown."
+    return [base.UserMessage(msg)]
 
 
 # Run app
