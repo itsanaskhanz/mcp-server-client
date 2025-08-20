@@ -1,16 +1,12 @@
-
 import os
 from dotenv import load_dotenv
 import sys
 import asyncio
 from typing import Optional
 from contextlib import AsyncExitStack
-from mcp import ClientSession
+from mcp import ClientSession, types
 from mcp.client.streamable_http import streamablehttp_client
-
-
 load_dotenv()
-
 
 class MCPClient:
     def __init__(self, server_url: str):
@@ -35,6 +31,13 @@ class MCPClient:
             )
         return self._session
 
+    async def list_tools(self) -> types.ListToolsResult:
+        result = await self.session().list_tools()
+        return result
+
+    async def call_tool(self, tool_name: str, tool_input: dict) -> types.CallToolResult:
+        return await self.session().call_tool(tool_name, tool_input)
+
     async def cleanup(self):
         await self._exit_stack.aclose()
         self._session = None
@@ -50,7 +53,16 @@ class MCPClient:
 async def main():
     mcp_server_url = os.getenv("MCP_SERVER_URL")
     async with MCPClient(mcp_server_url) as client:
-        print('Hello from MCP Client')
+        # TOOLS
+        tools = await client.list_tools()
+        # print("Tools:", tools)
+        if tools:
+            # Call static tool
+            static_result = await client.call_tool("doc_read_fixed", {})
+            print("Static tool result:", static_result)
+            # Call dynamic tool
+            dynamic_result = await client.call_tool("doc_read", {"doc_id": "plan.md"})
+            print("Dynamic tool result:", dynamic_result)
 
 
 if __name__ == "__main__":
