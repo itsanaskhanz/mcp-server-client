@@ -2,11 +2,12 @@ import os
 from dotenv import load_dotenv
 import sys
 import asyncio
-from typing import Optional
+from typing import Optional, Any
 from contextlib import AsyncExitStack
 from mcp import ClientSession, types
 from mcp.client.streamable_http import streamablehttp_client
 load_dotenv()
+
 
 class MCPClient:
     def __init__(self, server_url: str):
@@ -38,6 +39,17 @@ class MCPClient:
     async def call_tool(self, tool_name: str, tool_input: dict) -> types.CallToolResult:
         return await self.session().call_tool(tool_name, tool_input)
 
+    async def list_resource(self):
+        result = await self.session().list_resources()
+        return result
+
+    async def read_resource(self, uri: str) -> Any:
+        result = await self.session().read_resource(uri)
+        return result
+
+    async def list_template_resource(self) -> Any:
+        return await self.session().list_resource_templates()
+
     async def cleanup(self):
         await self._exit_stack.aclose()
         self._session = None
@@ -64,6 +76,22 @@ async def main():
             dynamic_result = await client.call_tool("doc_read", {"doc_id": "plan.md"})
             print("Dynamic tool result:", dynamic_result)
 
+       # LIST RESOURCES
+        resources = await client.list_resource()
+        print("All resources:", resources)
+
+        static_resource = await client.read_resource("docs://all")
+        print("Static resource (all docs):", static_resource)
+
+        # DYNAMIC RESOURCE
+        resource_templates = await client.list_template_resource()
+        print("Resource templates:", resource_templates)
+        if resource_templates.resourceTemplates:
+            template_uri = resource_templates.resourceTemplates[0].uriTemplate
+            doc_uri = template_uri.replace(
+                "{doc_id}", "plan.md")  # replace with desired doc
+            dynamic_resource = await client.read_resource(doc_uri)
+            print("Dynamic resource (plan.md):", dynamic_resource)
 
 if __name__ == "__main__":
     if sys.platform == "win32":
