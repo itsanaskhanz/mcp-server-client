@@ -6,6 +6,7 @@ from typing import Optional, Any
 from contextlib import AsyncExitStack
 from mcp import ClientSession, types
 from mcp.client.streamable_http import streamablehttp_client
+from pydantic import AnyUrl
 load_dotenv()
 
 
@@ -43,12 +44,20 @@ class MCPClient:
         result = await self.session().list_resources()
         return result
 
-    async def read_resource(self, uri: str) -> Any:
+    async def read_resource(self, uri: AnyUrl) -> Any:
         result = await self.session().read_resource(uri)
         return result
 
     async def list_template_resource(self) -> Any:
         return await self.session().list_resource_templates()
+
+    async def list_prompts(self) -> types.ListPromptsResult:
+        result = await self.session().list_prompts()
+        return result
+
+    async def get_prompt(self, prompt_name: str, args: dict[str, Any]) -> types.GetPromptResult:
+        result = await self.session().get_prompt(prompt_name, args)
+        return result
 
     async def cleanup(self):
         await self._exit_stack.aclose()
@@ -92,6 +101,17 @@ async def main():
                 "{doc_id}", "plan.md")  # replace with desired doc
             dynamic_resource = await client.read_resource(doc_uri)
             print("Dynamic resource (plan.md):", dynamic_resource)
+
+        # PROMPTS
+        prompts = await client.list_prompts()
+        print("Prompts:", prompts)
+
+        static_prompt = await client.get_prompt("doc_list", {})
+        print("Static prompt:", static_prompt)
+
+        dynamic_prompt = await client.get_prompt("doc_format", {"doc_id": "plan.md"})
+        print("Dynamic prompt:", dynamic_prompt)
+
 
 if __name__ == "__main__":
     if sys.platform == "win32":
