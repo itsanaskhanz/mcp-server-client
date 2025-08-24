@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 from pydantic import AnyUrl
 from mcp import ClientSession, CreateMessageResult, types
 from mcp.client.streamable_http import RequestContext, streamablehttp_client
-from mcp.types import CreateMessageRequestParams, ErrorData, TextContent
+from mcp.types import (
+    CreateMessageRequestParams,
+    ErrorData,
+    TextContent,
+    LoggingMessageNotificationParams,
+)
 
 load_dotenv()
 
@@ -24,7 +29,12 @@ class MCPClient:
         )
         _read, _write, _get_session_id = streamable_transport
         self._session = await self._exit_stack.enter_async_context(
-            ClientSession(_read, _write, sampling_callback=self.mock_sampler)
+            ClientSession(
+                _read,
+                _write,
+                sampling_callback=self.mock_sampler,
+                logging_callback=self.log_handler,
+            )
         )
         await self._session.initialize()
 
@@ -33,7 +43,6 @@ class MCPClient:
             raise ConnectionError(
                 "Client session not initialized. Call connect first."
             )
-
         return self._session
 
     async def list_tools(self) -> types.ListToolsResult:
@@ -58,11 +67,15 @@ class MCPClient:
         result = await self.session().list_prompts()
         return result
 
-    async def get_prompt(self, prompt_name: str, args: dict[str, Any]) -> types.GetPromptResult:
+    async def get_prompt(
+        self, prompt_name: str, args: dict[str, Any]
+    ) -> types.GetPromptResult:
         result = await self.session().get_prompt(prompt_name, args)
         return result
 
-    async def mock_sampler(self, context: RequestContext, params: types.CreateMessageRequestParams) -> CreateMessageResult | ErrorData:
+    async def mock_sampler(
+        self, context: RequestContext, params: types.CreateMessageRequestParams
+    ) -> CreateMessageResult | ErrorData:
         """
         This function is called whenever the server sends a 'sampling/create' request.
         It generates a fake short summary based on the input message.
@@ -75,15 +88,27 @@ class MCPClient:
         if params.messages and len(params.messages) > 0:
             doc_text = params.messages[0].content.text
 
-        mock_summary = f"Summary of document: '{doc_text[:50]}...' — This document contains key points worth noting, providing a concise overview."
+        mock_summary = (
+            f"Summary of document: '{doc_text[:50]}...' — "
+            "This document contains key points worth noting, "
+            "providing a concise overview."
+        )
 
         print("-> Client: Sending mock summary back to server.")
 
         return CreateMessageResult(
             role="assistant",
             content=types.TextContent(text=mock_summary, type="text"),
-            model="mock-llm"
+            model="mock-llm",
         )
+
+    async def log_handler(self, params: LoggingMessageNotificationParams):
+        """Handles server logs"""
+        emoji_map = {"debug": "🔍", "info": "📰", "warning": "⚠️", "error": "❌"}
+        emoji = emoji_map.get(params.level.lower(), "📝")
+        logger_info = f" [{params.logger}]" if params.logger else ""
+        print(f"{emoji} [{params.level.upper()}]{logger_info} {params.data}")
+        # print(f"📊 [PROGRESS {params.percent}%] {params.message}")
 
     async def cleanup(self):
         await self._exit_stack.aclose()
@@ -107,16 +132,19 @@ async def main():
             # Call static tool
             static_result = await client.call_tool("doc_read_fixed", {})
             print("Static tool result:", static_result)
+
             # Call dynamic tool
             dynamic_result = await client.call_tool("doc_read", {"doc_id": "plan.md"})
             print("Dynamic tool result:", dynamic_result)
 
         # Call sampling tool for doc summary
         if any(tool.name == "doc_summarize" for tool in tools.tools):
-            summary_result = await client.call_tool("doc_summarize", {"doc_id": "plan.md"})
+            summary_result = await client.call_tool(
+                "doc_summarize", {"doc_id": "plan.md"}
+            )
             print("Sampling tool (doc_summarize) result:", summary_result)
 
-       # LIST RESOURCES
+        # LIST RESOURCES
         resources = await client.list_resource()
         print("All resources:", resources)
 
@@ -128,8 +156,7 @@ async def main():
         print("Resource templates:", resource_templates)
         if resource_templates.resourceTemplates:
             template_uri = resource_templates.resourceTemplates[0].uriTemplate
-            doc_uri = template_uri.replace(
-                "{doc_id}", "plan.md")
+            doc_uri = template_uri.replace("{doc_id}", "plan.md")
             dynamic_resource = await client.read_resource(doc_uri)
             print("Dynamic resource (plan.md):", dynamic_resource)
 
